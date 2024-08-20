@@ -1,10 +1,9 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, lit
-from pyspark.sql.types import DoubleType
+from pyspark.sql.functions import lit
 
 # Создание Spark-сессии
 spark = SparkSession.builder \
-    .appName("Time Series Forecasting") \
+    .appName("Add Empty Columns") \
     .config("spark.executor.memory", "4g") \
     .config("spark.executor.cores", "4") \
     .config("spark.executor.instances", "4") \
@@ -18,19 +17,10 @@ csv_path = "10cTpok.csv"
 # Загрузка CSV файла
 df = spark.read.csv(csv_path, header=True, inferSchema=True, sep=';', encoding='UTF-8')
 
-# Определяем последний месяц, даже если он пустой или содержит нули
-last_month_col = df.columns[-1]  # Последний столбец в CSV
-
-# Заполняем пропуски и преобразуем в числовой тип
-df = df.fillna(0, subset=[last_month_col])
-df = df.withColumn(last_month_col, col(last_month_col).cast(DoubleType()))
-
-# Вычисляем прогноз для каждого из 18 месяцев
+# Добавляем 18 новых пустых столбцов
 for i in range(18):
     forecast_col = f'forecast_month_{i+1}'
-    # Простой прирост 5% на каждый месяц
-    forecast_value_expr = col(last_month_col) * (1 + 0.05 * (i + 1))
-    df = df.withColumn(forecast_col, forecast_value_expr)
+    df = df.withColumn(forecast_col, lit(None))
 
 # Сохранение результата в CSV файл
 output_path = "forecast_output.csv"
