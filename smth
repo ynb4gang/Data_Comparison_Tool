@@ -43,7 +43,7 @@ for i in range(18):
         when(
             (col("last_non_zero_month").isNotNull()) & 
             (col("last_non_zero_month") + i <= len(columns_to_fill)),
-            col(columns_to_fill[-1]) * (1 + 0.05 * (i + 1))  # Простой прирост
+            col(columns_to_fill[ col("last_non_zero_month") - 1 ]) * (1 + 0.05 * (i + 1))  # Простой прирост от последнего ненулевого месяца
         ).otherwise(0)
     )
 
