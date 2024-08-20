@@ -1,0 +1,62 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, when, lit, expr, max as sql_max, coalesce
+from pyspark.sql.window import Window
+from pyspark.sql.types import DoubleType, IntegerType
+
+# Создание Spark-сессии
+spark = SparkSession.builder \
+    .appName("Time Series Forecasting") \
+    .config("spark.executor.memory", "4g") \
+    .config("spark.executor.cores", "4") \
+    .config("spark.executor.instances", "4") \
+    .config("spark.sql.shuffle.partitions", "200") \
+    .config("spark.driver.memory", "2g") \
+    .getOrCreate()
+
+# Путь к вашему CSV файлу
+csv_path = "10cTpok.csv"
+
+# Загрузка CSV файла
+df = spark.read.csv(csv_path, header=True, inferSchema=True, sep=';', encoding='UTF-8')
+
+# Замена пустых полей на 0, начиная с 5-го столбца
+columns_to_fill = df.columns[4:]
+df = df.fillna(0, subset=columns_to_fill)
+
+# Преобразование колонок к числовому типу
+for column in columns_to_fill:
+    df = df.withColumn(column, col(column).cast(DoubleType()))
+
+# Найти последний месяц с ненулевым значением
+last_non_zero_month = None
+for i, column in enumerate(columns_to_fill):
+    current_col = when(col(column) > 0, lit(i+1))
+    if last_non_zero_month is None:
+        last_non_zero_month = current_col
+    else:
+        last_non_zero_month = coalesce(current_col, last_non_zero_month)
+
+# Добавляем столбец с последним ненулевым месяцем
+df = df.withColumn("last_non_zero_month", last_non_zero_month.cast(IntegerType()))
+
+# Рассчитываем прогноз: простой линейный прирост на основе последнего доступного значения
+for i in range(18):
+    forecast_col = f'forecast_month_{i+1}'
+    df = df.withColumn(
+        forecast_col,
+        when(
+            (col("last_non_zero_month").isNotNull()) & 
+            (col("last_non_zero_month") + i <= len(columns_to_fill)),
+            col(columns_to_fill[-1]) * (1 + 0.05 * (i + 1))  # Пример простого прироста
+        ).otherwise(0)
+    )
+
+# Удаляем временные колонки
+df = df.drop("last_non_zero_month")
+
+# Сохранение результата в CSV файл
+output_path = "forecast_output.csv"
+df.write.csv(output_path, header=True, sep=';', encoding='UTF-8', mode='overwrite')
+
+# Завершаем Spark сессию
+spark.stop()
