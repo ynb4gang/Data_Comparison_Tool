@@ -39,16 +39,18 @@ df = df.withColumn("last_non_zero_month", last_non_zero_month_expr.cast(IntegerT
 for i in range(18):
     forecast_col = f'forecast_month_{i+1}'
 
-    # Инициализация выражения прогноза как null
+    # Инициализация выражения прогноза как 0
     forecast_expr = lit(0)
 
-    # Перебираем каждый столбец и добавляем соответствующее условие в выражение
+    # Условие для расчета прироста на основе последнего ненулевого месяца
     for j, column in enumerate(columns_to_fill):
         forecast_expr = when(
-            col("last_non_zero_month") == (j + 1), 
+            (col("last_non_zero_month") == (j + 1)) & 
+            (col("last_non_zero_month") + i <= len(columns_to_fill)),
             col(column) * (1 + 0.05 * (i + 1))
         ).otherwise(forecast_expr)
 
+    # Создание новой колонки с прогнозом
     df = df.withColumn(forecast_col, forecast_expr)
 
 # Удаляем временные колонки
