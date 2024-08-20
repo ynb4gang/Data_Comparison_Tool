@@ -1,43 +1,58 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, lit, when, coalesce, expr
-from pyspark.sql.window import Window
-from pyspark.sql.types import IntegerType
+from pyspark.sql.functions import col, when, lit, expr, coalesce, greatest
+from pyspark.sql.types import DoubleType, IntegerType
 
-# Создаем Spark сессию
+# Создание Spark-сессии
 spark = SparkSession.builder \
-    .appName("TimeSeriesForecasting") \
+    .appName("Time Series Forecasting") \
+    .config("spark.executor.memory", "4g") \
+    .config("spark.executor.cores", "4") \
+    .config("spark.executor.instances", "4") \
+    .config("spark.sql.shuffle.partitions", "200") \
+    .config("spark.driver.memory", "2g") \
     .getOrCreate()
 
-# Загрузим данные из CSV файла
-df = spark.read.csv("path/to/your/file.csv", header=True, inferSchema=True)
+# Путь к вашему CSV файлу
+csv_path = "10cTpok.csv"
 
-# Вычисляем последнюю колонку с ненулевым значением
-last_non_zero_month = None
-for i, column in enumerate(df.columns[4:]):  # предполагаем, что первые 4 колонки — это метаданные
-    current_col = when(col(column).isNotNull() & (col(column) > 0), lit(i + 1)).otherwise(lit(0))
-    if last_non_zero_month is None:
-        last_non_zero_month = current_col
-    else:
-        last_non_zero_month = when(current_col > last_non_zero_month, current_col).otherwise(last_non_zero_month)
+# Загрузка CSV файла
+df = spark.read.csv(csv_path, header=True, inferSchema=True, sep=';', encoding='UTF-8')
 
-# Добавляем колонку с последним ненулевым месяцем
-df = df.withColumn("last_non_zero_month", last_non_zero_month.cast(IntegerType()))
+# Замена пустых полей на 0, начиная с 5-го столбца
+columns_to_fill = df.columns[4:]
+df = df.fillna(0, subset=columns_to_fill)
 
-# Создаем пустую таблицу для прогнозов на 18 месяцев
-forecast_columns = [f'forecast_month_{i+1}' for i in range(18)]
-forecast_df = df.select(df.columns[:4])  # Копируем первые 4 колонки (метаданные)
+# Преобразование колонок к числовому типу
+for column in columns_to_fill:
+    df = df.withColumn(column, col(column).cast(DoubleType()))
+
+# Найти последний месяц с ненулевым значением
+last_non_zero_month_expr = lit(None)
+for i, column in enumerate(columns_to_fill):
+    current_col = when(col(column) > 0, lit(i+1))
+    last_non_zero_month_expr = greatest(current_col, last_non_zero_month_expr)
+
+# Добавляем столбец с последним ненулевым месяцем
+df = df.withColumn("last_non_zero_month", last_non_zero_month_expr.cast(IntegerType()))
+
+# Вычисляем прогноз для каждого из 18 месяцев
 for i in range(18):
     forecast_col = f'forecast_month_{i+1}'
-    forecast_df = forecast_df.withColumn(forecast_col, lit(0))
-
-# Вычисляем прогноз
-for i in range(18):
-    forecast_col = f'forecast_month_{i+1}'
-    condition = (col("last_non_zero_month").isNotNull()) & (col("last_non_zero_month") + i <= len(df.columns[4:]))
-    forecast_df = forecast_df.withColumn(
-        forecast_col, 
-        when(condition, col(df.columns[-1]) * (1 + 0.05 * (i + 1))).otherwise(0)
+    df = df.withColumn(
+        forecast_col,
+        when(
+            (col("last_non_zero_month").isNotNull()) & 
+            (col("last_non_zero_month") + i <= len(columns_to_fill)),
+            col(columns_to_fill[-1]) * (1 + 0.05 * (i + 1))  # Простой прирост
+        ).otherwise(0)
     )
 
-# Сохраняем результаты в файл
-forecast_df.write.csv("path/to/save/forecast.csv", header=True)
+# Удаляем временные колонки
+df = df.drop("last_non_zero_month")
+
+# Сохранение результата в CSV файл
+output_path = "forecast_output.csv"
+df.write.csv(output_path, header=True, sep=';', encoding='UTF-8', mode='overwrite')
+
+# Завершаем Spark сессию
+spark.stop()
