@@ -1,9 +1,12 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import lit
+from pyspark.sql.functions import col, lit, when, array, struct, udf
+from pyspark.sql.types import ArrayType, DoubleType
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+import pandas as pd
 
-# Создание Spark-сессии
+# Initialize Spark session
 spark = SparkSession.builder \
-    .appName("Add Empty Columns") \
+    .appName("ExponentialSmoothing") \
     .config("spark.executor.memory", "4g") \
     .config("spark.executor.cores", "4") \
     .config("spark.executor.instances", "4") \
@@ -11,20 +14,50 @@ spark = SparkSession.builder \
     .config("spark.driver.memory", "2g") \
     .getOrCreate()
 
-# Путь к вашему CSV файлу
-csv_path = "10cTpok.csv"
+# Load data
+df = spark.read.option("header", "true").format("csv").load("test_csv_pandas.csv")
 
-# Загрузка CSV файла
-df = spark.read.csv(csv_path, header=True, inferSchema=True, sep=';', encoding='UTF-8')
+# User-defined function for exponential smoothing
+def apply_exponential_smoothing(series):
+    model = ExponentialSmoothing(series, seasonal='add', trend='add', seasonal_periods=12, freq='MS')
+    model_fit = model.fit()
+    forecast = model_fit.forecast(19)
+    return forecast.tolist()
 
-# Добавляем 18 новых пустых столбцов
-for i in range(18):
-    forecast_col = f'forecast_month_{i+1}'
-    df = df.withColumn(forecast_col, lit(None))
+# Registering the UDF
+apply_exponential_smoothing_udf = udf(lambda x: apply_exponential_smoothing(x), ArrayType(DoubleType()))
 
-# Сохранение результата в CSV файл
-output_path = "forecast_output.csv"
-df.write.csv(output_path, header=True, sep=';', encoding='UTF-8', mode='overwrite')
+# Assuming the data needs to be grouped and processed for each group
+df_pivot = df.groupBy("podsegment", "region_txt", "tariff_plan1", "service_id1").pivot("table_business_month").agg(spark_sum("fclc"))
 
-# Завершаем Spark сессию
-spark.stop()
+# Applying the exponential smoothing UDF to each column (you might want to apply to specific columns, adjust accordingly)
+forecasted_df = df_pivot.withColumn("forecast", apply_exponential_smoothing_udf(array([col(c) for c in df_pivot.columns[4:]])))
+
+# Handle the NaN values in the resulting forecast
+forecasted_df = forecasted_df.withColumn("forecast", when(col("forecast").isNull(), lit(0)).otherwise(col("forecast")))
+
+# Filter rows where none of the last 17 months have non-zero values
+last_17_cols = forecasted_df.columns[-17:]
+filter_condition = None
+for column in last_17_cols:
+    if filter_condition is None:
+        filter_condition = (col(column) != 0)
+    else:
+        filter_condition = filter_condition | (col(column) != 0)
+filtered_df = forecasted_df.filter(filter_condition)
+
+# Select the relevant columns (excluding group keys if necessary)
+selected_columns = filtered_df.columns[4:]  # Assuming the first 4 columns are group keys
+filtered_df = filtered_df.select(*selected_columns)
+
+# Convert filtered data back to Pandas if needed
+transposed_data = filtered_df.toPandas().T
+
+# Convert the transposed DataFrame back to PySpark DataFrame
+transposed_df = spark.createDataFrame(transposed_data)
+
+# Handle NaN values in transposed DataFrame
+transposed_df = transposed_df.fillna(0)
+
+# You can now save the result or perform further processing
+transposed_df.show()
