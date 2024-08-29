@@ -1,63 +1,154 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, lit, when, array, struct, udf
-from pyspark.sql.types import ArrayType, DoubleType
-from statsmodels.tsa.holtwinters import ExponentialSmoothing
-import pandas as pd
+from mtspark import get_spark
+from onetl.connection import Postgres, Greenplum
+from onetl.db import DBReader, DBWriter
+from py4j.protocol import Py4JJavaError 
 
-# Initialize Spark session
-spark = SparkSession.builder \
-    .appName("ExponentialSmoothing") \
-    .config("spark.executor.memory", "4g") \
-    .config("spark.executor.cores", "4") \
-    .config("spark.executor.instances", "4") \
-    .config("spark.sql.shuffle.partitions", "200") \
-    .config("spark.driver.memory", "2g") \
-    .getOrCreate()
 
-# Load data
-df = spark.read.option("header", "true").format("csv").load("test_csv_pandas.csv")
+extra = {
+    'tcpKeepAlive': 'true',
+    'server.port': '49152-65535',
+    'pool.maxSize': 10
+}
 
-# User-defined function for exponential smoothing
-def apply_exponential_smoothing(series):
-    model = ExponentialSmoothing(series, seasonal='add', trend='add', seasonal_periods=12, freq='MS')
-    model_fit = model.fit()
-    forecast = model_fit.forecast(19)
-    return forecast.tolist()
 
-# Registering the UDF
-apply_exponential_smoothing_udf = udf(lambda x: apply_exponential_smoothing(x), ArrayType(DoubleType()))
+def spark_config():
+  
+    """
+        The Method creates spark configuration considering the number of cores used for calculations, the amount of allocated memory 
+            
+        :return: customized spark configuration
+            
+    """
 
-# Assuming the data needs to be grouped and processed for each group
-df_pivot = df.groupBy("podsegment", "region_txt", "tariff_plan1", "service_id1").pivot("table_business_month").agg(spark_sum("fclc"))
+    try: 
+        spark = get_spark(
+        config = 
+        {
+        "appName": "mysessionname",  # название сессии
+        "spark.jars.packages": Postgres.get_packages() + Greenplum.get_packages(spark_version = "3.2.0"),
+        'spark.ui.showConsoleProgress': True,
+        'spark.sql.execution.arrow.pyspark.enabled': True,
+        "spark.driver.memory": "2g",
+        "spark.driver.cores": 2, #Задаем только в Cluster Mode 
+        "spark.executor.cores": 6,
+        "spark.executor.memory": "20g",
+        "spark.submit.deploymode": "client",
+        "spark.dynamicAllocation.enabled": True,
+        "spark.dynamicAllocation.initialExecutors": 1,
+        "spark.dynamicAllocation.minExecutors": 0,
+        "spark.dynamicAllocation.maxExecutors": 8,
+        "spark.dynamicAllocation.executorIdleTimeout": "60s",
+        }, 
+        spark_version="local",  # версия Spark, он должен быть установлен на edge ноду в /opt/spark
+        )
 
-# Applying the exponential smoothing UDF to each column (you might want to apply to specific columns, adjust accordingly)
-forecasted_df = df_pivot.withColumn("forecast", apply_exponential_smoothing_udf(array([col(c) for c in df_pivot.columns[4:]])))
+    except Py4JJavaError as e:
+        spark = None
+        print(f"An error occured:{e}")
 
-# Handle the NaN values in the resulting forecast
-forecasted_df = forecasted_df.withColumn("forecast", when(col("forecast").isNull(), lit(0)).otherwise(col("forecast")))
+    return spark
 
-# Filter rows where none of the last 17 months have non-zero values
-last_17_cols = forecasted_df.columns[-17:]
-filter_condition = None
-for column in last_17_cols:
-    if filter_condition is None:
-        filter_condition = (col(column) != 0)
-    else:
-        filter_condition = filter_condition | (col(column) != 0)
-filtered_df = forecasted_df.filter(filter_condition)
 
-# Select the relevant columns (excluding group keys if necessary)
-selected_columns = filtered_df.columns[4:]  # Assuming the first 4 columns are group keys
-filtered_df = filtered_df.select(*selected_columns)
+def source_connection():
+      
+    """
+        The method returns the connection to the source database 
+            
+        :return: the connection to the source database
+            
+    """
 
-# Convert filtered data back to Pandas if needed
-transposed_data = filtered_df.toPandas().T
+    try:
+        dwh = Postgres(
+            host="gp-mis-dwh.pv.mts.ru",
+            user="santalovdv",
+            password="KristyNik1092",
+            database="dwh",
+            spark=self.spark,
+            extra = self.extra
+        ).check()
 
-# Convert the transposed DataFrame back to PySpark DataFrame
-transposed_df = spark.createDataFrame(transposed_data)
+    except Exception as e:
+        dwh = None 
+        print(f"An error occured: {e}")
 
-# Handle NaN values in transposed DataFrame
-transposed_df = transposed_df.fillna(0)
+    return dwh
 
-# You can now save the result or perform further processing
-transposed_df.show()
+def target_connection():
+
+    """
+        The method returns the connection to the destination database
+            
+        :return: connection to the destination database
+            
+    """
+    try:
+        core = Greenplum(
+            host="beta-greenplum.bd-cloud.mts.ru",
+            user="santalovdv",
+            password="KristyNik1092",
+            database="core",
+            spark=self.spark,
+            extra=self.extra
+        ).check()
+
+    except Exception as e:
+        core=None
+        print(f"an error occured: {e}")
+
+    return core
+
+
+def insert_query(query : str, part_column : str = None):
+  
+    """
+        The method accepts a query body and optionally a partition column to create a query and write to the output of a dataframe with output data
+
+        :param query: SQL Query
+
+        :param part_column: Partition column
+            
+        :return: DataFrame with output data
+            
+    """
+
+    try:
+        if part_column == None:
+                df = dwh.sql(f"{query}")
+        else:
+                df = dwh.sql(f"{query}", 
+                options = Postgres.SQLOptions(
+                    partition_column=part_column,
+                    num_partitions=8,
+                    lower_bound=0,
+                    upper_bound=100
+                    )
+                )
+    except Py4JJavaError as e:
+        df=None
+        print(f"an error occured: {e}")
+
+    return df
+
+def write_to_DB():
+    
+    """
+        The method writes the data that is stored in the data frame to a table
+            
+        :return: Nothing        
+    """ 
+    try:
+        writer = DBWriter(
+            connection=core,
+            target="dds.operotchet_final",
+            options = Greenplum.WriteOptions(
+            if_exists="append",
+            truncate="false",
+            #distributedBy="regid"
+            ),
+        )
+    except Exception as e:
+            print(f"an error occured: {e}")
+            return None
+            
+    writer.run(df)
