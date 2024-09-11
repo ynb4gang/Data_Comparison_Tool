@@ -1,0 +1,69 @@
+import org.apache.commons.csv.CSVFormat;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.commons.csv.CSVPrinter;
+
+import java.io.*;
+import java.util.ArrayList;
+
+public class ExcelMethods {
+    public static ArrayList<String> getSheetList(String filepath) throws IOException {
+        ArrayList<String> sheetNames = new ArrayList<>();
+
+        FileInputStream fileInputStream = new FileInputStream(filepath);
+        Workbook workbook = new XSSFWorkbook(fileInputStream);
+
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            sheetNames.add(workbook.getSheetName(i));
+        }
+        workbook.close();
+        fileInputStream.close();
+
+        return sheetNames;
+    }
+
+    protected static Workbook openWorkbook(String filePath) throws FileNotFoundException {
+        Workbook workbook = null;
+        try (FileInputStream fis = new FileInputStream(filePath)) {
+            workbook = WorkbookFactory.create(fis);
+        } catch (FileNotFoundException e) {
+            System.err.println("File can't be find: " + filePath);
+            throw e;
+        } catch (IOException e) {
+            System.err.println("Cant read file: " + filePath);
+        }
+        return workbook;
+    }
+
+    protected static FileWriter createCSVFile(String fileName) {
+        String fileNameCSV = fileName + ".csv";
+        FileWriter writer = null;
+        try {
+            writer = new FileWriter(fileNameCSV);
+        } catch (IOException e) {
+            System.err.println("Error to create CSV file: " + e.getMessage());
+        }
+        return writer;
+    }
+
+    protected static void saveCSVFile(String filepathToSave, FileWriter fileWriter) {
+
+    }
+    protected static void createCSVsToAllMapRequiredLists(Workbook workbook, ArrayList<String> allSheetsList, ArrayList<String> requiredListToGenerateCSV, FileWriter fileWriter , String filepathToSave) throws IOException {
+        for (int i = 0; i < requiredListToGenerateCSV.size(); i++) {
+            if(allSheetsList.contains(requiredListToGenerateCSV.get(i))) {
+                FileWriter csvFile = ExcelMethods.createCSVFile(requiredListToGenerateCSV.get(i));
+                Sheet neededSheet = workbook.getSheet(requiredListToGenerateCSV.get(i));
+                for (int j = 0 ; j < neededSheet.getLastRowNum() + 1; j++ ) {
+                    Row row = neededSheet.getRow(j);
+                    int numberOfCells = neededSheet.getRow(j).getPhysicalNumberOfCells();
+                    for(int k = 0; k < numberOfCells; k++) {
+                        Cell cell = row.getCell(k);
+                        csvFile.append(cell.toString());
+                        csvFile.append(",");
+                    }
+                    csvFile.append('\n');
+                }
+            }
+        }
+    }
