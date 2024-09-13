@@ -1,0 +1,164 @@
+import org.apache.poi.ss.usermodel.*;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+public class ExcelMethods {
+
+  private static final Logger logger = Logger.getLogger(ExcelMethods.class.getName());
+
+  /**
+   * Получает список имен листов из Excel-файла.
+   *
+   * @param filepath Путь к Excel-файлу.
+   * @return Список имен листов.
+   * @throws IOException Если возникла ошибка при чтении файла.
+   */
+  public static List<String> getSheetList(String filepath) throws IOException {
+    List<String> sheetNames = new ArrayList<>();
+
+    // Открываем файл и создаем объект Workbook
+    try (FileInputStream fileInputStream = new FileInputStream(filepath);
+         Workbook workbook = new XSSFWorkbook(fileInputStream)) {
+
+      // Проходим по всем листам и добавляем их имена в список
+      for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+        sheetNames.add(workbook.getSheetName(i));
+      }
+    }
+
+    return sheetNames;
+  }
+
+  /**
+   * Открывает Excel-файл и возвращает объект Workbook.
+   *
+   * @param filePath Путь к Excel-файлу.
+   * @return Объект Workbook.
+   * @throws FileNotFoundException Если файл не найден.
+   */
+  protected static Workbook openWorkbook(String filePath) throws FileNotFoundException {
+    Workbook workbook = null;
+    try (FileInputStream fis = new FileInputStream(filePath)) {
+      workbook = WorkbookFactory.create(fis);
+    } catch (FileNotFoundException e) {
+      logger.log(Level.SEVERE, "File can't be found: " + filePath, e);
+      throw e;
+    } catch (IOException e) {
+      logger.log(Level.SEVERE, "Can't read file: " + filePath, e);
+    }
+    return workbook;
+  }
+
+  /**
+   * Создает пустые CSV-файлы в указанной директории.
+   *
+   * @param neededCSVFiles   Список имен файлов для создания.
+   * @param directoryPath Путь к директории, где нужно создать файлы.
+   * @return Сообщение о результате операции.
+   * @throws IOException Если возникли ошибки при создании файлов.
+   */
+  public static String createFiles(List<String> neededCSVFiles, String directoryPath)
+      throws IOException {
+
+    // Проверяем, существует ли директория, если нет - создаем
+    File targetDirectory = new File(directoryPath);
+    if (!targetDirectory.exists()) {
+      if (targetDirectory.mkdirs()) {
+        logger.info("Directory created: " + directoryPath);
+      } else {
+        logger.severe("Failed to create directory: " + directoryPath);
+        return "Failed to create directory";
+      }
+    }
+
+    // Создаем каждый CSV-файл из списка
+    for (String neededCSVFile : neededCSVFiles) {
+      String fileNameCSV = directoryPath + File.separator + neededCSVFile + ".csv";
+      File csvFile = new File(fileNameCSV);
+      if (!csvFile.exists()) {
+        try (FileWriter writer = new FileWriter(csvFile)) {
+          saveFile(writer, fileNameCSV);
+        } catch (IOException e) {
+          logger.log(Level.SEVERE, "Error creating CSV file: " + neededCSVFile, e);
+        }
+      }
+    }
+    return "All required CSV files created and saved";
+  }
+
+  /**
+   * Сохраняет файл CSV после записи данных в него.
+   *
+   * @param fileWriter Экземпляр FileWriter для записи в файл.
+   * @param filename   Имя файла, который нужно сохранить.
+   * @throws IOException Если возникла ошибка при записи.
+   */
+  protected static void saveFile(FileWriter fileWriter, String filename) throws IOException {
+    if (fileWriter != null) {
+      try {
+        fileWriter.flush();
+        fileWriter.close();
+        logger.info("CSV file " + filename + " saved successfully.");
+      } catch (IOException e) {
+        logger.log(Level.SEVERE, "Error saving CSV file: " + filename, e);
+      }
+    }
+  }
+
+  /**
+   * Записывает данные из Excel в существующие CSV-файлы.
+   *
+   * @param workbook                  Открытый объект Workbook с данными Excel.
+   * @param allSheetsList             Список всех листов Excel.
+   * @param requiredListToGenerateCSV Список листов, данные которых нужно сохранить в CSV.
+   * @param directoryPath             Путь к директории, где находятся CSV-файлы.
+   * @throws IOException Если возникли ошибки при записи данных.
+   */
+  public static void writeDataToCSVFiles(
+      Workbook workbook,
+      List<String> allSheetsList,
+      List<String> requiredListToGenerateCSV,
+      String directoryPath) throws IOException {
+
+    // Проходим по каждому листу, который нужно сохранить в CSV
+    for (String requiredSheet : requiredListToGenerateCSV) {
+      if (allSheetsList.contains(requiredSheet)) {
+        Sheet neededSheet = workbook.getSheet(requiredSheet);
+        String csvFilePath = directoryPath + File.separator + requiredSheet + ".csv";
+        File csvFile = new File(csvFilePath);
+
+        // Проверяем, существует ли файл и можем ли мы в него записывать
+        if (csvFile.exists() && csvFile.canWrite()) {
+          try (FileWriter csvFileWriter = new FileWriter(csvFile, true)) {
+            // Проходим по каждой строке листа
+            for (int j = 0; j <= neededSheet.getLastRowNum(); j++) {
+              Row row = neededSheet.getRow(j);
+              if (row == null) continue;
+
+              int numberOfCells = row.getPhysicalNumberOfCells();
+              // Проходим по каждой ячейке строки и записываем данные в CSV
+              for (int k = 0; k < numberOfCells; k++) {
+                Cell cell = row.getCell(k);
+                if (cell != null) {
+                  csvFileWriter.append(cell.toString());
+                }
+                if (k < numberOfCells - 1) {
+                  csvFileWriter.append(",");
+                }
+              }
+              csvFileWriter.append('\n');
+            }
+            saveFile(csvFileWriter, csvFilePath);
+          } catch (IOException e) {
+            logger.log(Level.SEVERE, "Error writing to CSV: " + csvFilePath, e);
+          }
+        } else {
+          logger.severe("CSV file " + csvFilePath + " cannot be written.");
+        }
+      }
+    }
+  }
+}
