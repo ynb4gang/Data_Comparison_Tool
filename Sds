@@ -6,14 +6,17 @@ def get_status(row):
     row["abonent_activation_month"] = pd.to_datetime(row["abonent_activation_month"], errors='coerce', format="%Y-%m")
     row["month_zak_block"] = pd.to_datetime(row["month_zak_block"], errors='coerce', format="%Y-%m")
     
-    # Рассчитываем разницу в днях между датами
-    days_diff = (row["month_zak_block"] - row["abonent_activation_month"]).days if pd.notnull(row["abonent_activation_month"]) and pd.notnull(row["month_zak_block"]) else None
+    # Рассчитываем разницу в днях между датами, если даты существуют
+    if pd.notnull(row["abonent_activation_month"]) and pd.notnull(row["month_zak_block"]):
+        days_diff = (row["month_zak_block"] - row["abonent_activation_month"]).days
+    else:
+        days_diff = None
 
-    # Используем numpy.select для условий
+    # Используем numpy.select для условий с проверкой на None
     conditions = [
         (row['mark_zak_block'] == 1.0) & pd.isnull(row["abonent_activation_month"]),
-        (row['mark_zak_block'] == 1.0) & pd.notnull(row["abonent_activation_month"]) & (days_diff < 28),
-        (row['mark_zak_block'] == 1.0) & pd.notnull(row["abonent_activation_month"]) & (days_diff >= 28)
+        (row['mark_zak_block'] == 1.0) & pd.notnull(row["abonent_activation_month"]) & (days_diff is not None) & (days_diff < 28),
+        (row['mark_zak_block'] == 1.0) & pd.notnull(row["abonent_activation_month"]) & (days_diff is not None) & (days_diff >= 28)
     ]
 
     choices = ["Отключен", "Неактивирован", "Отключен"]
