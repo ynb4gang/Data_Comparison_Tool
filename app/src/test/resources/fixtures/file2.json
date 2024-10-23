@@ -1,0 +1,19 @@
+{
+  "name": "John",
+  "age": 31,
+  "address": {
+    "city": "New York",
+    "zipcode": "10002"
+  },
+  "pets": [
+    {
+      "type": "dog",
+      "name": "Bobby"
+    },
+    {
+      "type": "cat",
+      "name": "Fluffy"
+    }
+  ],
+  "car": null
+}

@@ -1,0 +1,10 @@
+{
+  - address: {city=New York, zipcode=10001}
+  + address: {city=New York, zipcode=10002}
+  - age: 30
+  + age: 31
+  + car: null
+    name: John
+  - pets: [{type=dog, name=Buddy}, {type=cat, name=Whiskers}]
+  + pets: [{type=dog, name=Bobby}, {type=cat, name=Fluffy}]
+}

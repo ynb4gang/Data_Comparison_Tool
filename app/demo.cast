@@ -1,0 +1,13 @@
+{"version": 2, "width": 120, "height": 30, "timestamp": 1708261715, "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}}
+[1.023215, "o", "nvm is not compatible with the npm config \"prefix\" option: currently set to \"/home/carti/.asdf/installs/nodejs/21.2.0\"\r\n"]
+[1.023962, "o", "Run `npm config delete prefix` or `nvm use --delete-prefix v21.2.0 --silent` to unset it.\r\n"]
+[1.025724, "o", "\u001b[?2004h\u001b]0;carti@SLATT: /mnt/c/Users/carti/Documents/GitHub/java-project-71/app\u0007\u001b[01;32mcarti@SLATT\u001b[00m:\u001b[01;34m/mnt/c/Users/carti/Documents/GitHub/java-project-71/app\u001b[00m$ "]
+[25.09541, "o", "\u001b[7masciinema play demo.cast\u001b[27m"]
+[25.441153, "o", "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\basciinema play demo.cast\r\n"]
+[25.441217, "o", "\u001b[?2004l\r"]
+[26.583024, "o", "nvm is not compatible with the npm config \"prefix\" option: currently set to \"/home/carti/.asdf/installs/nodejs/21.2.0\"\r\nRun `npm config delete prefix` or `nvm use --delete-prefix v21.2.0 --silent` to unset it.\r\n"]
+[26.584462, "o", "\u001b[?2004h\u001b]0;carti@SLATT: /mnt/c/Users/carti/Documents/GitHub/java-project-71/app\u0007\u001b[01;32mcarti@SLATT\u001b[00m:\u001b[01;34m/mnt/c/Users/carti/Documents/GitHub/java-project-71/app\u001b[00m$ "]
+[50.67843, "o", "\u001b[7masciinema play demo.cast\u001b[27m"]
+[51.000344, "o", "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\basciinema play demo.cast\r\n\u001b[?2004l\r"]
+[52.14309, "o", "nvm is not compatible with the npm config \"prefix\" option: currently set to \"/home/carti/.asdf/installs/nodejs/21.2.0\"\r\nRun `npm config delete prefix` or `nvm use --delete-prefix v21.2.0 --silent` to unset it.\r\n"]
+[52.143274, "o", "\u001b[?2004h\u001b]0;carti@SLATT: /mnt/c/Users/carti/Documents/GitHub/java-project-71/app\u0007\u001b[01;32mcarti@SLATT\u001b[00m:\u001b[01;34m/mnt/c/Users/carti/Documents/GitHub/java-project-71/app\u001b[00m$ "]

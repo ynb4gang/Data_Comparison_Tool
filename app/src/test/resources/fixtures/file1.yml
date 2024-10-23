@@ -1,0 +1,10 @@
+name: John
+age: 30
+address:
+  city: New York
+  zipcode: "10001"
+pets:
+  - type: dog
+    name: Buddy
+  - type: cat
+    name: Whiskers

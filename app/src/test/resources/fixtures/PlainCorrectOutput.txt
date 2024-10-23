@@ -1,0 +1,4 @@
+Property 'address' was updated. From [complex value] to [complex value]
+Property 'age' was updated. From 30 to 31
+Property 'car' was added with value: null
+Property 'pets' was updated. From [complex value] to [complex value]
